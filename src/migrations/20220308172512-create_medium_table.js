@@ -10,12 +10,6 @@ module.exports = {
       },
       user_id: {
         type: Sequelize.INTEGER,
-        references: {
-          model: {
-            tableName: 'user',
-          },
-          key: 'id',
-        },
       },
       s3_key: {
         type: Sequelize.TEXT(),

@@ -13,6 +13,7 @@ const sequelize = new Sequelize(
     port: dbConfig.port,
     dialect: 'mysql',
     logging: (...msg) => logger.info(msg.toString()),
+    dialectOptions: { ssl: {} },
   }
 )
 export default sequelize

@@ -6,12 +6,6 @@ module.exports = {
       user_id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
-        references: {
-          model: {
-            tableName: 'user',
-          },
-          key: 'id',
-        },
       },
       name: {
         type: Sequelize.STRING(25),

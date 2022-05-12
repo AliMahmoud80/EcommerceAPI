@@ -45,12 +45,6 @@ module.exports = {
       role_id: {
         type: Sequelize.INTEGER,
         defaultValue: 1,
-        references: {
-          model: {
-            tableName: 'role',
-          },
-          key: 'id',
-        },
       },
       created_at: {
         type: Sequelize.DATE,

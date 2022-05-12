@@ -12,23 +12,11 @@ module.exports = {
         type: Sequelize.INTEGER,
         primaryKey: true,
         unique: 'unique_user_product_review',
-        references: {
-          model: {
-            tableName: 'user',
-          },
-          key: 'id',
-        },
       },
       product_id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
         unique: 'unique_user_product_review',
-        references: {
-          model: {
-            tableName: 'product',
-          },
-          key: 'id',
-        },
       },
       content: {
         type: Sequelize.TEXT('medium'),

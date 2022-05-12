@@ -10,22 +10,10 @@ module.exports = {
       },
       supplier_id: {
         type: Sequelize.INTEGER,
-        references: {
-          model: {
-            tableName: 'supplier',
-          },
-          key: 'user_id',
-        },
       },
       category_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
-        references: {
-          model: {
-            tableName: 'category',
-          },
-          key: 'id',
-        },
       },
       title: {
         type: Sequelize.TEXT('medium'),

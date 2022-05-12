@@ -15,12 +15,6 @@ module.exports = {
       parent_category_id: {
         type: Sequelize.INTEGER,
         allowNull: true,
-        references: {
-          model: {
-            tableName: 'category',
-          },
-          key: 'id',
-        },
       },
       created_at: {
         type: Sequelize.DATE,

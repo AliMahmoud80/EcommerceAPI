@@ -11,22 +11,10 @@ module.exports = {
       user_id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
-        references: {
-          model: {
-            tableName: 'user',
-          },
-          key: 'id',
-        },
       },
       order_id: {
         type: Sequelize.INTEGER,
         primaryKey: true,
-        references: {
-          model: {
-            tableName: 'order',
-          },
-          key: 'id',
-        },
       },
       method: {
         type: Sequelize.STRING,

@@ -6,23 +6,10 @@ module.exports = {
       role_id: {
         primaryKey: true,
         type: Sequelize.INTEGER,
-        references: {
-          model: {
-            tableName: 'role',
-          },
-          key: 'id',
-        },
-        onDelete: 'cascade',
       },
       permission_id: {
         primaryKey: true,
         type: Sequelize.INTEGER,
-        references: {
-          model: {
-            tableName: 'permission',
-          },
-          key: 'id',
-        },
         onDelete: 'cascade',
       },
       created_at: {
