@@ -1,0 +1,26 @@
+{
+  "presets": [
+    [
+      "@babel/preset-typescript",
+      {
+        "allowDeclareFields": true,
+        "onlyRemoveTypeImports": true
+      }
+    ],
+    [
+      "@babel/preset-env",
+      {
+        "targets": {
+          "node": "current"
+        }
+      }
+    ]
+  ],
+  "plugins": [
+    ["@babel/plugin-proposal-decorators", { "legacy": true }],
+    "babel-plugin-transform-typescript-metadata",
+    ["@babel/plugin-transform-typescript", { "allowDeclareFields": true }],
+    ["@babel/plugin-proposal-class-properties", { "loose": true }],
+    "tsconfig-paths-module-resolver"
+  ]
+}

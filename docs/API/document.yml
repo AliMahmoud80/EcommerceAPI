@@ -1,0 +1,3037 @@
+---
+openapi: 3.0.3
+info:
+  version: '1.0'
+  title: Ecommerce
+  description: |
+    ## Introduction
+    ---------------
+    This is an example of an API for an e-commerce system.
+
+    This API follows REST API style and [JSON API](https://jsonapi.org/) specifications.
+
+    ## Authentication
+    ------------------------
+    The API uses [JSON Web Tokens](https://jwt.io) to authenticate users.
+
+    Tokens are generated from the server after users' authentication then, They are set in users' browsers' cookies.
+
+    If the user attempted to perform an operation that requires authentication and the JWT token wasn't provided in the request or it's malformed,
+    `not_authorized` error will be returned with status code `401`.
+
+
+    ## Authorization
+    -----------------------
+    Authorization system is based on roles and permissions.
+
+    Every user is assigned to a role.
+
+    Each role have a finite number of permissions.
+
+    Each operation can be performed by this API requires a specific permisison.
+
+    Roles can be created/edited dynamically while permissions are static (cannot be changed).
+        
+    The reason for that is that the system depends on checking the specified permissions to perform the needed action, if any permission changed the whole system must be modified to match up the change,
+    so the permissions should be static and predetermined.
+
+    Examples: 
+    - For using /users endpoint to list all users, The user must have read:usersAll permission.
+    - To be able to set user role the user must have set:user_role:all permission
+    - etc...
+
+    Unauthorized operations will throw `forbidden_operation` error with status code `403`.
+
+    ## Errors
+    ---------
+    This API relies on HTTP status codes to indicate whether there was an error or not and will return a JSON response containing error details.
+
+    #### Table of errors types
+    | Error Title         	| Status Code 	| Cause                                                                                          	|
+    |---------------------	|-------------	|------------------------------------------------------------------------------------------------	|
+    | general_error       	| 500         	| Unknown error cause                                                                                 	|
+    | not_authorized      	| 401         	| User is not authenticated                                                                      	|
+    | forbidden_operation 	| 403         	| User doesn't have the required permissions to perform the intended operation 	|
+    | validation_error    	| 422         	| Invalid data provided in the request                                                           	|
+    | not_found           	| 404         	| Resource doesn't exist                                                                         	|
+    | conflict_error  	| 419         	| Trying to create a resource that already exists                                    	|
+    | page_out_of_bounds  	| 404         	| Page requested for paginated list of resource doesn't exist                                    	|
+    | unsupported_media_type_error  	| 415         	| Media uploaded is not supported                                    	|
+
+    It's important to note that these errors may be returned from **any** endpoint (when tring to perform any operation) even if it's not specified in this document.
+
+    ## Resource Expansion
+    ---------------------
+    In this API most of the resources have relationships with other resources.
+
+    for example:
+    - `Review` is related to `User` resources 
+    - `Product` is related to `Supplier` resources 
+    - ..etc
+
+    By default when you request a resource only that resource would be returned (Resources with relationship to this resource will not be returned) and that is to keep the response as minimal as possible with no overhead.
+
+    Yet you can include the related resources you need using the `include` query parameter
+    to reduce the number of requests needed to get all the resources you need.
+
+    For example when you are requesting a user resource you can use `include=reviews` to include all the reviews related to this user. 
+
+    You can find a detailed description of the `inlcude` query paramter in this document.
+
+  license:
+    name: MIT
+servers:
+  - url: http://{SERVER}:{PORT}
+    variables:
+      SERVER:
+        default: localhost
+        description: API server host
+      PORT:
+        default: '3000'
+        description: Server port
+paths:
+  /users:
+    get:
+      summary: List users
+      description: List all users
+      operationId: ListUsers
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Limit'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Paginated collection of users
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/User'
+      tags:
+        - Users
+    post:
+      summary: Create a user
+      description: Create a user
+      operationId: createUser
+      requestBody:
+        description: JSON object contains the new user information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '201':
+          description: |
+            User created successfully
+
+            The new user resource will be returned
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/User'
+      tags:
+        - Users
+  /users/{id}:
+    get:
+      summary: Get a user
+      description: Get details about single user
+      operationId: getUser
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: specified user resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/User'
+      tags:
+        - Users
+    patch:
+      summary: Update an existing user
+      operationId: updateUser
+      description: Update user information
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      requestBody:
+        description: |
+          JSON object contains fields to be updated with its new value
+
+          If unknown field provided it will be **ignored**
+        content:
+          application/json:
+            schema:
+              '$ref': '#/components/schemas/User'
+      responses:
+        '200':
+          description: |
+            User information updated successfully
+
+            User resource will be returned 
+
+            Then, A **NEW** authentication token will be set
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: JWT_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEyMTQiLCJ0eXBlIjoidXNlcnMiLCJhdHRyaWJ1dGVzIjp7ImZpcnN0X25hbWUiOiJBbGkiLCJsYXN0X25hbWUiOiJNYWhtb3VkIiwiZW1haWwiOiJhbGkubWFobW91ZDcwODBAZ21haWwuY29tIiwicGhvbmVfbnVtYmVyIjoiMDEyMjkzNTMwNDciLCJjb3VudHJ5IjoiRWd5cHQiLCJyZWdpb24iOiJBbGV4YW5kcmlhIiwiYWRkcmVzcyI6IjIyMUIgQmFrZXIgU3RyZWV0Iiwicm9sZSI6ImFkbWluIiwiY3JlYXRlZF9hdCI6IjIwMjItMDEtMDZUMDA6MTk6MTIuNjM2WiIsInVwZGF0ZWRfYXQiOiIyMDIyLTAxLTA2VDAwOjE5OjEyLjYzNloifX0.HIfviQ8GQ96Fsc2m1Z27qyyXRErUX_DKKr7lDtmvLbs Path=/; HttpOnly
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/User'
+      tags:
+        - Users
+    delete:
+      summary: Delete a user
+      description: Delete a user by its id
+      operationId: deleteUser
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: User deleted successfully
+      tags:
+        - Users
+  /users:authenticate:
+    post:
+      summary: Authenticate user
+      operationId: authenticateUser
+      description: |
+        Authenticate user using email and password
+
+        *master_access_token* will be set and it will be used for authorization
+      requestBody:
+        required: true
+        description: JSON Object contains user credentials
+        content:
+          application/json:
+            schema:
+              required:
+                - email
+                - password
+              properties:
+                email:
+                  type: string
+                  format: email
+                  nullable: false
+                password:
+                  type: string
+                  format: password
+                  nullable: false
+      responses:
+        '200':
+          description: User successfully authenticated
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: JWT_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEyMTQiLCJ0eXBlIjoidXNlcnMiLCJhdHRyaWJ1dGVzIjp7ImZpcnN0X25hbWUiOiJBbGkiLCJsYXN0X25hbWUiOiJNYWhtb3VkIiwiZW1haWwiOiJhbGkubWFobW91ZDcwODBAZ21haWwuY29tIiwicGhvbmVfbnVtYmVyIjoiMDEyMjkzNTMwNDciLCJjb3VudHJ5IjoiRWd5cHQiLCJyZWdpb24iOiJBbGV4YW5kcmlhIiwiYWRkcmVzcyI6IjIyMUIgQmFrZXIgU3RyZWV0Iiwicm9sZSI6ImFkbWluIiwiY3JlYXRlZF9hdCI6IjIwMjItMDEtMDZUMDA6MTk6MTIuNjM2WiIsInVwZGF0ZWRfYXQiOiIyMDIyLTAxLTA2VDAwOjE5OjEyLjYzNloifX0.HIfviQ8GQ96Fsc2m1Z27qyyXRErUX_DKKr7lDtmvLbs Path=/; HttpOnly
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/User'
+      tags:
+        - Users
+  /users/{id}/roles:
+    get:
+      operationId: GetUserRole
+      summary: Get user's role
+      description: Get user's role
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: User role resource
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/Role'
+      tags:
+        - Users
+        - Roles
+  /users/{id}/reviews:
+    get:
+      summary: List user reviews
+      description: List all reviews related to this user
+      operationId: ListUserReviews
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of user reviews
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Review'
+      tags:
+        - Users
+        - Reviews
+  /users/{id}/media:
+    get:
+      summary: List user media
+      description: List all media related to this user
+      operationId: ListUserMedia
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of user media
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Medium'
+      tags:
+        - Users
+        - Media
+  /users/{id}/orders:
+    get:
+      summary: List user orders
+      description: List all orders related to this user
+      operationId: ListUserOrders
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of user orders
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Order'
+      tags:
+        - Users
+        - Orders
+  /users/{id}/payments:
+    get:
+      summary: List user payments
+      description: List all payments related to this user
+      operationId: ListUserPayments
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of user payments
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Payment'
+      tags:
+        - Users
+        - Payments
+  /users/whoami:
+    get:
+      operationId: GetCurrentUser
+      summary: Get current user
+      description: Get current user
+      parameters:
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Current user resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/User'
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+                example: JWT_TOKEN=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjEyMTQiLCJ0eXBlIjoidXNlcnMiLCJhdHRyaWJ1dGVzIjp7ImZpcnN0X25hbWUiOiJBbGkiLCJsYXN0X25hbWUiOiJNYWhtb3VkIiwiZW1haWwiOiJhbGkubWFobW91ZDcwODBAZ21haWwuY29tIiwicGhvbmVfbnVtYmVyIjoiMDEyMjkzNTMwNDciLCJjb3VudHJ5IjoiRWd5cHQiLCJyZWdpb24iOiJBbGV4YW5kcmlhIiwiYWRkcmVzcyI6IjIyMUIgQmFrZXIgU3RyZWV0Iiwicm9sZSI6ImFkbWluIiwiY3JlYXRlZF9hdCI6IjIwMjItMDEtMDZUMDA6MTk6MTIuNjM2WiIsInVwZGF0ZWRfYXQiOiIyMDIyLTAxLTA2VDAwOjE5OjEyLjYzNloifX0.HIfviQ8GQ96Fsc2m1Z27qyyXRErUX_DKKr7lDtmvLbs Path=/; HttpOnly
+      tags:
+        - Users
+  /suppliers:
+    get:
+      summary: List suppliers
+      description: List all suppliers
+      operationId: ListSuppliers
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated collection of suppliers
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Supplier'
+      tags:
+        - Suppliers
+    post:
+      summary: Create a supplier
+      description: Create a supplier
+      operationId: createSupplier
+      requestBody:
+        description: JSON object contains the new supplier information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Supplier'
+      responses:
+        '201':
+          description: |
+            Supplier created successfully
+
+            The new supplier resource will be returned
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Supplier'
+      tags:
+        - Suppliers
+  /suppliers/{id}:
+    get:
+      summary: Get a supplier
+      description: Get details about single supplier
+      operationId: getSupplier
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: specified supplier resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Supplier'
+      tags:
+        - Suppliers
+    patch:
+      summary: Update an existing supplier
+      operationId: updateSupplier
+      description: Update supplier information
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      requestBody:
+        description: |
+          JSON object contains fields to be updated with its new value
+
+          If unknown field provided it will be **ignored**
+        content:
+          application/json:
+            schema:
+              '$ref': '#/components/schemas/Supplier'
+      responses:
+        '200':
+          description: |
+            Supplier information updated successfully
+
+            Supplier resource will be returned
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/Supplier'
+      tags:
+        - Suppliers
+    delete:
+      summary: Delete a supplier
+      description: Delete a supplier by its id
+      operationId: deleteSupplier
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Supplier deleted successfully
+      tags:
+        - Suppliers
+  /suppliers/{id}/users:
+    get:
+      operationId: GetSupplierUser
+      summary: Get supplier related user
+      description: Get the user related to this supplier
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: User resource
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/User'
+      tags:
+        - Users
+        - Suppliers
+  /suppliers/{id}/products:
+    get:
+      summary: List supplier products
+      description: List all products related to this supplier
+      operationId: ListSupplierProducts
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of supplier products
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Product'
+      tags:
+        - Suppliers
+        - Products
+  /suppliers/{id}/sales:
+    get:
+      summary: List supplier sales
+      description: List all sales related to this supplier
+      operationId: ListSupplierSales
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of supplier sales
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Sale'
+      tags:
+        - Suppliers
+  /suppliers/{id}/reviews:
+    get:
+      summary: List supplier reviews
+      description: List all reviews made to this supplier
+      operationId: ListSupplierReviews
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of supplier reviews
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Review'
+      tags:
+        - Suppliers
+        - Reviews
+  /products:
+    get:
+      summary: List Products
+      description: List all products
+      operationId: ListProducts
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated collection of products
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Product'
+      tags:
+        - Products
+    post:
+      summary: Create a product
+      description: Create a product
+      operationId: createProduct
+      requestBody:
+        description: JSON object contains product information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Product'
+      responses:
+        '201':
+          description: |
+            Product created successfully
+
+            The new products resource will be returned
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Product'
+      tags:
+        - Products
+  /products/{id}:
+    get:
+      summary: Get a product
+      description: Get details about single product
+      operationId: getProduct
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Specified products resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Product'
+      tags:
+        - Products
+    patch:
+      summary: Update an existing product
+      operationId: updateProduct
+      description: Update product information
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      requestBody:
+        description: |
+          JSON object contains fields to be updated with its new value.
+
+          If unknown field provided it will be **ignored**.
+        required: true
+        content:
+          application/json:
+            schema:
+              '$ref': '#/components/schemas/Product'
+      responses:
+        '200':
+          description: Product information updated successfully
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/Product'
+      tags:
+        - Products
+    delete:
+      summary: Delete a product
+      description: Delete product by its id
+      operationId: deleteProduct
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Product deleted successfully
+      tags:
+        - Products
+  /products/{id}/reviews:
+    get:
+      summary: List reviews of a prodcut
+      description: List all reviews related to this product
+      operationId: ListProductReviews
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of product reviews
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Review'
+      tags:
+        - Products
+        - Reviews
+  /products/{id}/suppliers:
+    get:
+      operationId: GetProductSupplier
+      summary: Get product supplier
+      description: Get the supplier of the product
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Supplier resource
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/Supplier'
+      tags:
+        - Products
+        - Suppliers
+  /products/{id}/categories:
+    get:
+      summary: Get product category
+      description: Get the category of this prodcut
+      operationId: getProductCetegory
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Category resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Category'
+      tags:
+        - Products
+        - Categories
+  /media:
+    get:
+      summary: List media
+      description: List all media resources
+      operationId: ListMedia
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated list of media
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Medium'
+      tags:
+        - Media
+    post:
+      summary: Create a medium
+      description: Create a medium
+      operationId: createMedium
+      requestBody:
+        $ref: '#/components/requestBodies/MediaUpload'
+      responses:
+        '201':
+          description: |
+            Media created successfully
+
+            The new *Media* resource will be returned
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Medium'
+      tags:
+        - Media
+  /media/{id}:
+    get:
+      summary: Get medium
+      description: Get details about single media
+      operationId: getMedium
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Specified medium resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Medium'
+      tags:
+        - Media
+    delete:
+      summary: Delete a medium
+      description: Delete *Media* Resource by its id
+      operationId: deleteMedium
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Medium deleted successfully
+      tags:
+        - Media
+  /media/{id}/users:
+    get:
+      summary: Get a the owner of a medium
+      description: Get details about the owner of this medium
+      operationId: getMediumUser
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: specified medium resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/User'
+      tags:
+        - Media
+        - Users
+  /reviews:
+    get:
+      summary: List reviews
+      description: List all reviews
+      operationId: ListReviews
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated list of reviews
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Review'
+      tags:
+        - Reviews
+    post:
+      summary: Create a Review
+      description: Create a Review
+      operationId: createReview
+      requestBody:
+        description: JSON object contains review information
+        content:
+          application/json:
+            schema:
+              properties:
+                data:
+                  $ref: '#/components/schemas/Review'
+      responses:
+        '201':
+          description: |
+            User created successfully.
+
+            The new review resource will be returned
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/User'
+      tags:
+        - Reviews
+  /reviews/{id}:
+    get:
+      summary: Get a review
+      description: Get details about single review.
+      operationId: getReview
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Specified review resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Review'
+      tags:
+        - Reviews
+    patch:
+      summary: Update an existing Reivew
+      operationId: updateReview
+      description: Update review information
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      requestBody:
+        description: |
+          JSON object contains fields to be updated with its new value.
+
+          If unknown field provided it will be **ignored**.
+        content:
+          application/json:
+            schema:
+              '$ref': '#/components/schemas/Review'
+      responses:
+        '200':
+          description: Review information updated successfully.
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/Product'
+      tags:
+        - Reviews
+    delete:
+      summary: Delete a Review
+      description: Delete Review by its id
+      operationId: deleteReview
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Review deleted successfully.
+      tags:
+        - Reviews
+  /reviews/{id}/users:
+    get:
+      summary: Get review owner
+      description: Get details about the reviewer
+      operationId: getReviewOwner
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: specified user resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/User'
+      tags:
+        - Reviews
+        - Users
+  /reviews/{id}/products:
+    get:
+      summary: Get the reviewed product
+      description: Get details about the review product
+      operationId: getReviewProduct
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Specified product resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Product'
+      tags:
+        - Reviews
+        - Products
+  /categories:
+    get:
+      summary: List categories
+      description: List all categories resources
+      operationId: ListCategories
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated list of categories
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Category'
+      tags:
+        - Categories
+    post:
+      summary: Create a new Category
+      description: Create a new Category
+      operationId: createCategory
+      requestBody:
+        description: JSON object contains category information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Category'
+      responses:
+        '201':
+          description: |
+            Product created successfully.
+
+            The new category resource will be returned
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Category'
+      tags:
+        - Categories
+  /categories/{id}:
+    get:
+      summary: Get a category
+      description: Get details about single category.
+      operationId: getCetegory
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Specified category resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Category'
+      tags:
+        - Categories
+    patch:
+      summary: Update an existing category
+      operationId: updateCetegory
+      description: Update product information
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      requestBody:
+        description: |
+          JSON object contains fields to be updated with its new value
+
+          If unknown field provided it will be **ignored**.
+        required: true
+        content:
+          application/json:
+            schema:
+              '$ref': '#/components/schemas/Category'
+      responses:
+        '200':
+          description: Cetegory information updated successfully.
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/Category'
+      tags:
+        - Categories
+    delete:
+      summary: Delete a category
+      description: Delete a cetegory by its id
+      operationId: deleteCetegory
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Category deleted successfully
+      tags:
+        - Categories
+  /categories/{id}/parent:
+    get:
+      summary: Get category parent
+      description: Get the parent category of a category
+      operationId: getCetegoryParent
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Specified category resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Category'
+      tags:
+        - Categories
+  /categories/{id}/products:
+    get:
+      summary: Get related products
+      description: List all products related to this category
+      operationId: ListCategoryProducts
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of products
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Product'
+      tags:
+        - Categories
+        - Products
+  /roles:
+    get:
+      summary: List roles
+      description: List all roles
+      operationId: ListRoles
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated collection of roles
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Role'
+      tags:
+        - Roles
+    post:
+      summary: Create a role
+      description: Create a role
+      operationId: createRole
+      requestBody:
+        description: JSON object contains the new role information
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Role'
+      responses:
+        '201':
+          description: |
+            Role created successfully
+
+            The new role resource will be returned
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Role'
+      tags:
+        - Roles
+  /roles/{id}:
+    get:
+      summary: Get a role
+      description: Get details about single role
+      operationId: getRole
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: specified role resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Role'
+      tags:
+        - Roles
+    patch:
+      summary: Update an existing role
+      operationId: updateRole
+      description: Update role information
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      requestBody:
+        description: |
+          JSON object contains fields to be updated with its new value
+
+          If unknown field provided it will be **ignored**
+        content:
+          application/json:
+            schema:
+              '$ref': '#/components/schemas/Role'
+      responses:
+        '200':
+          description: |
+            Role information updated successfully
+
+            Role resource will be returned
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/Role'
+      tags:
+        - Roles
+    delete:
+      summary: Delete a role
+      description: Delete a role by its id
+      operationId: deleteRole
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      responses:
+        '204':
+          description: Role deleted successfully
+      tags:
+        - Roles
+  /roles/{id}/users:
+    get:
+      summary: List users to related to this role
+      description: List all users that have a the specified role
+      operationId: ListRoleUsers
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of role users
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/User'
+      tags:
+        - Roles
+        - Users
+  /roles/{id}/permissions:
+    get:
+      summary: List all permissions of a role
+      description: List all permissions of the specified role
+      operationId: ListRolePermissions
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of role permissions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Permission'
+      tags:
+        - Roles
+  /permissions:
+    get:
+      summary: List all permissions
+      description: List all permissions
+      operationId: ListPermissions
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated List of permissions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Permission'
+      tags:
+        - Permissions
+  /permissions/{id}:
+    get:
+      summary: Get a permission
+      description: Get details about single user
+      operationId: GetPermissions
+      parameters:
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Specified permission resource
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/Permission'
+      tags:
+        - Permissions
+  /orders:
+    get:
+      summary: List all orders
+      description: List collection of orders
+      operationId: ListOrders
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated list of orders
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Order'
+      tags:
+        - Orders
+    post:
+      summary: Create an Order
+      description: Create an Order
+      operationId: createOrder
+      requestBody:
+        description: JSON object contains order information
+        content:
+          application/json:
+            schema:
+              properties:
+                data:
+                  $ref: '#/components/schemas/Order'
+      responses:
+        '201':
+          description: |
+            Order created successfully.
+
+            Order resource will be returned
+          content:
+            application/json:
+              schema:
+                '$ref': '#/components/schemas/Order'
+      tags:
+        - Orders
+  /orders/{id}:
+    get:
+      summary: Get an order
+      description: Get details about single order
+      operationId: getOrder
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Specified order resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Order'
+      tags:
+        - Orders
+  /orders/{id}:checkout:
+    post:
+      summary: Checkout an order
+      description: Create a stripe payment intent for an order that will be used client side for checkout
+      operationId: checkoutOrder
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      responses:
+        '200':
+          description: Stripe client secret that will be used by stripe-sdk in client side to complete the payment
+      tags:
+        - Orders
+        - Payments
+  /orders/{id}:cancel:
+    post:
+      summary: Cancel an order
+      description: |
+        Cancel the order and refund the payment of the order if paid
+      operationId: cancelOrder
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+      responses:
+        '202':
+          description: Order canceled successfully
+      tags:
+        - Orders
+  /orders/{id}/products:
+    get:
+      summary: List products in an order
+      description: List collection of products in an order
+      operationId: ListOrderProducts
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+      responses:
+        '200':
+          description: Paginated list of products
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Product'
+      tags:
+        - Products
+        - Orders
+  /orders/{id}/users:
+    get:
+      summary: Get order owner
+      description: Get details about order owner
+      operationId: getOrderOwner
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: owner user resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/User'
+      tags:
+        - Users
+        - Orders
+  /payments:
+    get:
+      summary: List all payments
+      description: List collection of payment
+      operationId: ListPayments
+      parameters:
+        - '$ref': '#/components/parameters/Page'
+        - '$ref': '#/components/parameters/Fields'
+        - '$ref': '#/components/parameters/Include'
+        - '$ref': '#/components/parameters/Sort'
+        - '$ref': '#/components/parameters/Filter'
+        - '$ref': '#/components/parameters/Limit'
+      responses:
+        '200':
+          description: Paginated list of payments
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - '$ref': '#/components/schemas/Pagination'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          '$ref': '#/components/schemas/Payment'
+      tags:
+        - Payments
+  /payments/{id}:
+    get:
+      summary: Get a payment
+      description: Get details about single payment
+      operationId: getPayment
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: specified payment resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Payment'
+      tags:
+        - Payments
+  /payments/{id}/orders:
+    get:
+      summary: Get order payment
+      description: Get the order related to this payment
+      operationId: getPaymentOrder
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Order resource
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Order'
+      tags:
+        - Orders
+        - Payments
+  /payments/{id}/users:
+    get:
+      summary: Get payment owner
+      description: Get the owner of the payment
+      operationId: getPaymentOwner
+      parameters:
+        - '$ref': '#/components/parameters/ResourceId'
+        - '$ref': '#/components/parameters/Fields'
+      responses:
+        '200':
+          description: Payment owner
+          content:
+            application/json:
+              schema:
+                properties:
+                  data:
+                    '$ref': '#/components/schemas/Order'
+      tags:
+        - Users
+        - Payments
+
+  # Webhooks
+  /webhooks/stripe:
+    post:
+      operationId: ReceiveStripeEvents
+      description: Webhook to receive stripe events
+      responses:
+        '202':
+          description: Event received
+
+      tags:
+        - Webhooks
+
+tags:
+  - name: Users
+  - name: Roles
+  - name: Permissions
+  - name: Suppliers
+  - name: Products
+  - name: Reviews
+  - name: Media
+  - name: Categories
+  - name: Orders
+  - name: Payments
+  - name: Webhooks
+
+components:
+  schemas:
+    User:
+      type: object
+      description: User resource
+      required:
+        - id
+        - type
+        - attributes
+        - relationships
+      properties:
+        id:
+          type: string
+          description: Resource unique identifier
+          uniqueItems: true
+          readOnly: true
+        type:
+          type: string
+          description: Resource type
+          default: User
+        attributes:
+          type: object
+          properties:
+            first_name:
+              type: string
+              description: User's first name
+              minimum: 2
+              maximum: 26
+            last_name:
+              type: string
+              description: User's last name
+              minimum: 2
+              maximum: 26
+            email:
+              type: string
+              format: email
+              uniqueItems: true
+              description: User's email address
+              minimum: 6
+              maximum: 254
+            password:
+              type: string
+              format: password
+              description: |
+                User's Password
+
+                Password must contain at least one upper case, one lower case, one number and, one special character.
+              minLength: 8
+              maxLength: 32
+              writeOnly: true
+            phone_number:
+              type: string
+              description: User's phone number
+              format: mobile number
+              uniqueItems: true
+            country:
+              type: string
+              description: User's country
+              example: Egypt
+              minimum: 4
+              maximum: 254
+            region:
+              type: string
+              description: User's country region/state
+              example: Alexandria
+              minimum: 4
+              maximum: 254
+            address:
+              type: string
+              description: User's address
+              example: 221B Baker Street
+              minimum: 5
+              maximum: 500
+            role_id:
+              type: string
+              description: User's role identifier
+              writeOnly: true
+            created_at:
+              type: string
+              format: date-time
+              description: User's account creation date
+              readOnly: true
+            updated_at:
+              type: string
+              format: date-time
+              description: User's account last update date
+              readOnly: true
+        relationships:
+          type: object
+          readOnly: true
+          description: Related resources to this user resource
+          required:
+            - role
+            - orders
+            - payments
+            - media
+            - reviews
+          properties:
+            role:
+              type: object
+              description: User role info
+              required:
+                - links
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/users/1/roles
+                data:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    type:
+                      type: string
+                      default: Role
+            orders:
+              type: object
+              description: User orders
+              required:
+                - links
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/users/1/orders
+            media:
+              type: object
+              description: User orders
+              required:
+                - links
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/users/1/media
+            reviews:
+              type: object
+              description: User Reviews
+              required:
+                - links
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/users/1/reviews
+            payments:
+              type: object
+              description: User Reviews
+              required:
+                - links
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/users/1/payments
+    Supplier:
+      type: object
+      description: Supplier resource
+      required:
+        - id
+        - type
+        - attributes
+        - relationships
+      properties:
+        id:
+          type: string
+          description: |
+            Resource unique identifier (supplier's User id)
+
+            This id is the same id for the owner user who created the supplier
+          uniqueItems: true
+          readOnly: true
+        type:
+          type: string
+          description: Resource type
+          default: Supplier
+        attributes:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Supplier's name
+              minimum: 2
+              maximum: 26
+            email:
+              type: string
+              format: email
+              uniqueItems: true
+              description: Supplier's email address
+              minimum: 6
+              maximum: 254
+            phone_number:
+              type: string
+              description: Supplier's phone number
+              format: mobile number
+              uniqueItems: true
+            country:
+              type: string
+              description: Supplier's country
+              example: Egypt
+              minimum: 4
+              maximum: 254
+            region:
+              type: string
+              description: Supplier's country region/state
+              example: Alexandria
+              minimum: 4
+              maximum: 254
+            address:
+              type: string
+              description: Supplier's address
+              example: 221B Baker Street
+              minimum: 5
+              maximum: 500
+            balance:
+              description: Supplier's balance in USD dollar
+              type: integer
+              format: double
+              readOnly: true
+            created_at:
+              type: string
+              format: date-time
+              description: Supplier's account creation date
+              readOnly: true
+            updated_at:
+              type: string
+              format: date-time
+              description: Supplier's account last update date
+              readOnly: true
+        relationships:
+          type: object
+          readOnly: true
+          description: Related resources to this supplier resource
+          required:
+            - users
+            - roles
+            - prodcuts
+          properties:
+            user:
+              type: object
+              description: User resource
+              required:
+                - links
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/suppliers/1/users
+            reviews:
+              type: object
+              description: Reviews to this Supplier's products
+              required:
+                - links
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/suppliers/1/reviews
+            products:
+              type: object
+              description: Products that are sold by this supplier
+              required:
+                - links
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/suppliers/1/products
+            sales:
+              type: object
+              description: Supplier sales
+              required:
+                - links
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/suppliers/1/sales
+    Sale:
+      type: object
+      description: An object represents product sale
+      required:
+        - id
+        - type
+        - attributes
+        - relationships
+      properties:
+        id:
+          type: string
+          description: Sale identifier
+          uniqueItems: true
+          readOnly: true
+        type:
+          type: string
+          description: Resource type
+          default: Sale
+        attributes:
+          type: object
+          properties:
+            product_id:
+              type: string
+            quantity:
+              type: number
+    Product:
+      type: object
+      description: Product resource
+      required:
+        - id
+        - type
+        - attributes
+        - relationships
+      properties:
+        id:
+          type: string
+          description: Resource unique identifier
+          uniqueItems: true
+          readOnly: true
+        type:
+          type: string
+          description: Resource type
+          default: Product
+        attributes:
+          type: object
+          properties:
+            title:
+              type: string
+              description: Product's name
+              minimum: 10
+              maximum: 60
+            content:
+              type: string
+              description: Product's full description content in html format.
+              format: html
+              minimum: 25
+              maximum: 5000
+            price:
+              type: number
+              format: double
+              description: Product's price
+              minimum: 5
+            stock:
+              type: number
+              description: Product's stock.
+              nullable: true
+            rate:
+              type: number
+              format: float
+              description: Product's average rate.
+              readOnly: true
+            thumbnails:
+              type: array
+              maxItems: 10
+              minItems: 0
+              writeOnly: true
+              items:
+                type: string
+                format: binary
+            category_id:
+              type: string
+              writeOnly: true
+            additional_attributes:
+              type: object
+              format: JSON
+              description: Additional attributes
+            created_at:
+              type: string
+              format: date-time
+              description: Product's creation date
+              readOnly: true
+            updated_at:
+              type: string
+              format: date-time
+              description: Product's last update date
+              readOnly: true
+        relationships:
+          type: object
+          readOnly: true
+          description: Related resources to this product resource
+          required:
+            - supplier
+            - reviews
+            - category
+          properties:
+            supplier:
+              type: object
+              description: Product's supplier
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/products/1/supplier
+                data:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    type:
+                      type: string
+                      default: Supplier
+            category:
+              type: object
+              description: Product's Category
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/products/1/cetegories
+            reviews:
+              type: object
+              description: Product's Reviews
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/products/1/reviews
+    Review:
+      type: object
+      description: Review resource
+      required:
+        - id
+        - type
+        - attributes
+        - relationships
+      properties:
+        id:
+          type: string
+          description: Resource unique identifier
+          uniqueItems: true
+          readOnly: true
+        type:
+          type: string
+          description: Resource type
+          default: Review
+        attributes:
+          required:
+            - content
+            - rate
+            - created_at
+            - updated_at
+          properties:
+            content:
+              type: string
+              description: Review's content
+              minimum: 3
+              maximum: 1000
+            rate:
+              type: number
+              description: User's rate to this product
+              minimum: 0
+              maximum: 10
+            created_at:
+              type: string
+              format: date-time
+              description: Review's creation date
+              readOnly: true
+            updated_at:
+              type: string
+              format: date-time
+              description: Review's last update date
+              readOnly: true
+        relationships:
+          type: object
+          description: Related resources to this review
+          required:
+            - owner
+            - item
+          readOnly: true
+          properties:
+            owner:
+              type: object
+              description: Review owner
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/reviews/1/users
+                data:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    type:
+                      type: string
+                      default: User
+            product:
+              type: object
+              description: Product that reviewed
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/reviews/1/products
+                data:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    type:
+                      type: string
+                      default: Product
+    Category:
+      type: object
+      description: Cateogry resource
+      required:
+        - id
+        - type
+        - attributes
+        - relationships
+      properties:
+        id:
+          type: string
+          description: Resource unique identifier
+          uniqueItems: true
+          readOnly: true
+        type:
+          type: string
+          description: Resource type
+          default: Category
+        attributes:
+          type: object
+          required:
+            - name
+            - created_at
+            - updated_at
+          properties:
+            name:
+              type: string
+            created_at:
+              type: string
+              format: date-time
+              description: Category's creation date
+              readOnly: true
+            updated_at:
+              type: string
+              format: date-time
+              description: Category's last update date
+              readOnly: true
+        relationships:
+          type: object
+          description: Related resources to this category resource
+          readOnly: true
+          required:
+            - items
+          properties:
+            products:
+              type: object
+              description: Products in this category
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/categories/1/products
+            parent_category:
+              type: object
+              description: The parent category of this category if it exist
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/categories/1/parent
+                data:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    type:
+                      type: string
+                      default: Role
+    Medium:
+      type: object
+      description: Medium resource
+      required:
+        - id
+        - type
+        - attributes
+        - relationships
+      properties:
+        id:
+          type: string
+          description: Resource unique identeifier
+          uniqueItems: true
+          readOnly: true
+        type:
+          type: string
+          description: Resource type
+          default: Medium
+        attributes:
+          type: object
+          required:
+            - path
+            - size
+            - created_at
+            - updated_at
+          properties:
+            path:
+              type: string
+              format: url
+              description: Media's file absolute path/url
+              example: https://s3.amazonaws.com/bucket/path/image.png
+              readOnly: true
+            file:
+              type: string
+              format: binary
+              description: Medium to be uploaded
+              writeOnly: true
+            size:
+              type: integer
+              description: Medium file size in megabytes
+              format: float
+              example: 2555
+              readOnly: true
+            media_type:
+              type: string
+              description: medium type
+              enum:
+                - video
+                - image
+            created_at:
+              type: string
+              description: Medium's creation date
+              format: date-time
+              readOnly: true
+            updated_at:
+              type: string
+              description: Medium's last edit date
+              format: date-time
+              readOnly: true
+        relationships:
+          type: object
+          description: Related resources to this media resource
+          readOnly: true
+          properties:
+            owner:
+              type: object
+              description: User who uploaded this medium
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/media/1/users
+                data:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    type:
+                      type: string
+                      default: User
+    Order:
+      type: object
+      description: Order resource
+      required:
+        - id
+        - type
+        - attributes
+        - relationships
+      properties:
+        id:
+          type: string
+          description: Resource unique identifier
+          uniqueItems: true
+          readOnly: true
+        type:
+          type: string
+          description: Resource type
+          default: Order
+        attributes:
+          type: object
+          required:
+            - status
+            - created_at
+            - updated_at
+          properties:
+            order_products:
+              writeOnly: true
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                    description: Product id
+                  quantity:
+                    type: number
+                    description: Ordered quantity
+            status:
+              type: string
+              description: Status of the order.
+              enum:
+                - pending
+                - canceled
+                - shipping
+                - received
+              readOnly: true
+            created_at:
+              type: string
+              format: date-time
+              description: Order's creation date
+              readOnly: true
+            updated_at:
+              type: string
+              format: date-time
+              description: Order's last update date
+              readOnly: true
+        relationships:
+          type: object
+          description: Related resources to this order resource
+          readOnly: true
+          properties:
+            products:
+              type: object
+              description: Products in this order
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/orders/1/products
+                data:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                      type:
+                        type: string
+                        default: Product
+            owner:
+              type: object
+              description: Order owner
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/orders/1/users
+                data:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    type:
+                      type: string
+                      default: User
+    Payment:
+      type: object
+      description: Payment resource
+      required:
+        - id
+        - type
+        - attributes
+        - relationships
+      properties:
+        id:
+          type: string
+          description: Resource unique identifier
+          uniqueItems: true
+          readOnly: true
+        type:
+          type: string
+          description: Resource type
+          default: Payment
+        attributes:
+          type: object
+          properties:
+            vendor_id:
+              type: string
+              description: Vendor payment id
+              example: pi_32AkjQ5H4Bas2eAolX13
+            payment_method:
+              type: string
+              format: enum
+              example: stripe
+            amount:
+              type: number
+              description: Payment amount
+              format: double
+              example: 1337.7
+            status:
+              type: string
+              description: Payment status
+            currency:
+              type: string
+              description: payment currency
+              example: 'USD'
+            created_at:
+              type: string
+              format: date-time
+              description: Order's creation date
+              readOnly: true
+            updated_at:
+              type: string
+              format: date-time
+              description: Order's last update date
+              readOnly: true
+        relationships:
+          type: object
+          description: Related resources to this payment resource
+          readOnly: true
+          required:
+            - payer
+            - order
+          properties:
+            payer:
+              type: object
+              description: Payer
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/payments/1/users
+            order:
+              type: object
+              description: paid Order
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/payments/1/orders
+    Role:
+      type: object
+      description: Role resource
+      required:
+        - id
+        - type
+        - attributes
+      properties:
+        id:
+          type: string
+          description: Resource unique identifier
+          uniqueItems: true
+          readOnly: true
+        type:
+          type: string
+          description: Resource type
+          default: Role
+        attributes:
+          type: object
+          properties:
+            name:
+              type: string
+              default: normal
+              uniqueItems: true
+            permissions_ids:
+              type: array
+              writeOnly: true
+              items:
+                type: string
+                format: number
+            created_at:
+              type: string
+              format: date-time
+              description: role's creation date
+              readOnly: true
+            updated_at:
+              type: string
+              format: date-time
+              description: role's last update date
+              readOnly: true
+        relationships:
+          type: object
+          description: Related resources to this *Role* resource
+          readOnly: true
+          required:
+            - payer
+            - order
+          properties:
+            users:
+              type: object
+              description: Users own this role
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/roles/1/users
+            permissions:
+              type: object
+              description: Role permissions
+              properties:
+                links:
+                  type: object
+                  properties:
+                    self:
+                      type: string
+                      example: https://www.example.com/roles/1/permissions
+    Permission:
+      type: object
+      description: Permission resource
+      required:
+        - id
+        - type
+        - attributes
+      properties:
+        id:
+          type: string
+          description: Resource unique identifier
+          uniqueItems: true
+          readOnly: true
+        type:
+          type: string
+          description: Resource type
+          default: Role
+        attributes:
+          properties:
+            name:
+              type: string
+              example: read:usersAll
+    Pagination:
+      type: object
+      required:
+        - links
+        - meta
+      properties:
+        links:
+          type: object
+          required:
+            - fisrt
+            - last
+            - next
+            - prev
+          properties:
+            first:
+              type: string
+              format: url
+              description: Absolute url/path to the first page of this resource collection.
+              example: https://www.example.com/resource?page=1
+            last:
+              type: string
+              format: url
+              description: Absolute url/path to the last page of this resource collection.
+              example: https://www.example.com/resource?page=1000
+            next:
+              type: string
+              format: url
+              nullable: true
+              description: Absolute url/path to the next page of this resource collection.
+              example: https://www.example.com/resource?page=5
+            prev:
+              type: string
+              format: url
+              nullable: true
+              description:
+                Absolute url/path to the previous page of this resource
+                collection.
+              example: https://www.example.com/resource?page=3
+    #         meta:
+    #           type: object
+    #           properties:
+    #             total_pages:
+    #               type: number
+    #               format: integer
+    #               description: Total number of pages
+    #               example: 1000
+
+    Error:
+      type: object
+      description: General error
+      required:
+        - title
+        - status
+        - detail
+      properties:
+        status:
+          type: string
+          default: '500'
+          readOnly: true
+        title:
+          type: string
+          description: Error title
+          default: general_error
+          readOnly: true
+        detail:
+          type: string
+          description: Detailed description of the error
+          default: Unknown Error occurred
+          readOnly: true
+    ResourceNotFoundError:
+      description: Resource not found
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            title:
+              default: resource_not_found
+            status:
+              default: '404'
+            detail:
+              default: Resource not found
+    ForbiddenOperationError:
+      description: User can't perform this operation
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            title:
+              default: forbidden_operation
+            status:
+              default: '403'
+            detail:
+              default: Forbidden operation
+    UnsupportedMediaTypeError:
+      description: Unsupported media type
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            title:
+              default: unsupported_media_type_error
+            status:
+              default: '415'
+            detail:
+              default: Unsupported media type
+            meta:
+              type: object
+              properties:
+                allowed_media_types:
+                  type: array
+                  items:
+                    type: string
+                    default:
+                      ['image/jpeg', 'image/png', 'image/gif', 'video/mp4']
+    ConflictError:
+      description: Resource already exists
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            title:
+              default: conflict_error
+            status:
+              default: '419'
+            detail:
+              default: Resource already exists
+    ValidationError:
+      description: Field value is not valid
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - type: object
+          properties:
+            status:
+              default: '422'
+            title:
+              default: validation_error
+            detail:
+              default: Invalid data provided
+            source:
+              type: object
+              properties:
+                pointer:
+                  type: string
+                  example: 'data/attributes/password'
+                attribute:
+                  type: string
+                  example: 'password'
+                value:
+                  type: string
+                  example: p@ss
+    PageOutOfBoundsError:
+      description: Page requested doesn't exist
+      allOf:
+        - $ref: '#/components/schemas/Error'
+        - allOf:
+            - $ref: '#/components/schemas/Pagination'
+            - type: object
+              properties:
+                title:
+                  example: page_out_of_bounds
+                status:
+                  example: '404'
+                detail:
+                  example: Invalid page number
+  parameters:
+    ResourceId:
+      name: id
+      in: path
+      description: Resource unique identifier
+      required: true
+      allowEmptyValue: false
+      schema:
+        type: string
+    Page:
+      name: page
+      in: query
+      description: Page number for a paginated collection of resources
+      required: false
+      schema:
+        type: number
+        format: integer
+        default: 1
+    Fields:
+      name: fields
+      in: query
+      description: |
+        Fields to be returned in the response indexed by resource type
+
+        Resource type must be singular 
+
+        Names of the fields must be in **snake case**
+
+        If no fields specified, an **empty** *attributes* field will be returned
+
+        If an unknown field name or resource type provided, `ValidationError` will be returned
+
+        **NOTE:** It can be used in conjunction with the *inlcude* parameter
+        to specify the fields of the inlcuded resources.
+
+        Example: ?include=reviews&fields[users]=email&fields[reviews]=rate
+
+      required: false
+      allowEmptyValue: true
+      style: deepObject
+      explode: true
+      schema:
+        type: object
+        properties:
+          fieldName:
+            type: array
+            items:
+              type: string
+      examples:
+        'first name and email for a users resrouce':
+          description: will return only first_name and email for a **Users** resource
+          value:
+            User:
+              - first_name
+              - email
+        'product name and price':
+          description: will return only product name and price for a **Products** resource
+          value:
+            Product:
+              - name
+              - price
+    Include:
+      name: include
+      in: query
+      description: |
+        Include resources that is in relationship to this resource
+
+        Specified resources types must be in **lowercase**
+
+        If an empty value provided, this parameter will be **ignored**
+
+        If an unknown relationship provided, `ValidationError` will be returned
+
+        Included resources will be embeded in a field called **included** in the body of every parent resource
+
+        **NOTE:** you can't include resources that is in relationship with the included resources
+        (only one level of inclusion is allowed) 
+        .i.e you can include the *Products* resources that is in relationship with the *User*
+        but you can't include the *Reviews* resources that is related to the *Products* resources.
+
+        Example:
+      required: false
+      allowEmptyValue: true
+      style: form
+      explode: false
+      schema:
+        type: array
+        items:
+          type: string
+      examples:
+        'include reviews for a user':
+          description: will return all reviews for this user in **included** field
+          value:
+            - reviews
+    Sort:
+      name: sort
+      in: query
+      description: |
+        Sort results by one or multiable fields seprated by comma (,).
+
+        If the field name is prefixed by a minus (-) then sort order will be descending 
+
+        Specified resources types must be in **lowercase**.
+
+        Fields names must be in **snake case**
+
+        If an empty value provided, the parameter will be **ignored**
+
+        If an unknown field name or resource type provided, `ValidationError` will be returned
+
+        The sort order for each sort field will be in ascending order by default
+      style: form
+      explode: false
+      required: false
+      schema:
+        type: array
+        items:
+          type: string
+      examples:
+        'Sort by email':
+          value:
+            - email
+        'Sort by rate in descending order':
+          value:
+            - -rate
+    Filter:
+      name: filter
+      in: query
+      description: |
+        Filter results by specific fields values
+
+        Fields names must be in **snake case**
+
+        Specified resources types must be in **lowercase**.
+
+        If an empty value provided, the parameter will be **ignored**
+
+        If an unknown field name or resource type provided, `ValidationError` will be returned
+
+        If an ambiguous or wrong syntax provided, `ValidationError` will be returned
+
+        Syntax and usage:
+        -------
+        *field_name* **operation** "value"        
+
+        Supported operations: 
+        --------
+        | Operation | Description                                                             | Applied for               |
+        |-----------|-------------------------------------------------------------------------|---------------------------|
+        | >         | Field value is greater than "value"                                     | integer - Date            |
+        | >=        | Field value is greater than or equal "value"                            | integer - Date            |
+        | <         | Field value is less than "value"                                        | integer - Date            |
+        | <=        | Field value is less than or equal "value"                               | integer - Date            |
+        | =         | Field value is equal to "value"<br>NOTE: "value" is **case sensitive**  | integer - string - Date   |
+        | like      | Field value is like "value"                                             | string                    |
+        | and       | Logical AND                                                             | NA                        |
+        | or        | Logical OR                                                              | NA                        |
+        | ()        | Group logical operators together                                        | NA                        |
+      style: deepObject
+      explode: true
+      required: false
+      schema:
+        type: object
+        properties:
+          fieldName:
+            type: array
+            items:
+              type: string
+      examples:
+        'Filter products by name and price':
+          value:
+            Products:
+              - name like "keyboard" & price > 500
+        'Filter products by a name and price or another name and price':
+          value:
+            Products:
+              - (name like "samsung" and price > 500) or (name like "iphone" and price >= 1000)
+    Limit:
+      name: limit
+      in: query
+      style: form
+      description: Specify the limit of a paginated resources per page
+      schema:
+        type: number
+        format: integer
+        default: 10
+      example: 10
+  requestBodies:
+    MediaUpload:
+      description: multipart/form-data request that contains the uploaded media
+      content:
+        multipart/form-data:
+          schema:
+            type: object
+            properties:
+              media:
+                type: array
+                description: Array of media files to be uploaded with maximum file size 100MB and maximum 10 files per request
+                items:
+                  type: string
+                  format: binary
+                  maximum: 10
+  responses:
+    Forbidden:
+      description: Forbidden operation
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              errors:
+                type: array
+                items:
+                  '$ref': '#/components/schemas/ForbiddenOperationError'
+    NotFound:
+      description: Resource Not Found
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              errors:
+                type: array
+                items:
+                  oneOf:
+                    - '$ref': '#/components/schemas/ResourceNotFoundError'
+                    - '$ref': '#/components/schemas/PageOutOfBoundsError'
+    PageOutOfBounds:
+      description: Page requested out of bounds
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              errors:
+                type: array
+                items:
+                  '$ref': '#/components/schemas/PageOutOfBoundsError'
+    ValidationError:
+      description: Invalid data provided
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              errors:
+                type: array
+                items:
+                  '$ref': '#/components/schemas/ValidationError'
+    UnsupportedMediaType:
+      description: Unsupported media type error
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              errors:
+                type: array
+                items:
+                  '$ref': '#/components/schemas/UnsupportedMediaTypeError'
+  securitySchemes:
+    MasterAccessToken:
+      description: JsonWebToken used to authenticate users
+      name: master_access_token
+      type: apiKey
+      in: cookie
+security: []
